@@ -116,17 +116,21 @@ if st.button(T["calc"]):
 
     df = pd.DataFrame({"Year": np.arange(1, int(term) + 1), "NOI": nois, "PV": pvs})
 
-    # ============ 用 matplotlib 绘制 Streamlit 一致图表 ==============
+    # ======== 使用原版更漂亮的图表 ========
     chart_buf = BytesIO()
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(df["Year"], df["NOI"], label="NOI", color="#1f77b4", linewidth=2.2)
-    ax.plot(df["Year"], df["PV"], label="PV", color="#2ca02c", linewidth=2.2)
-    ax.fill_between(df["Year"], df["PV"], color="#2ca02c", alpha=0.1)
-    ax.legend(frameon=False)
+    ax.plot(df["Year"], df["NOI"], label="NOI（净经营收益）", color="#0052CC", linewidth=2.5)
+    ax.plot(df["Year"], df["PV"], label="PV（贴现现金流）", color="#00A86B", linewidth=2.5)
+    ax.fill_between(df["Year"], df["PV"], color="#00A86B", alpha=0.15)
+    ax.grid(True, linestyle="--", alpha=0.4)
+    ax.legend(frameon=False, fontsize=10)
     ax.set_title(T["chart"], fontsize=14, fontweight="bold", pad=10)
     ax.set_xlabel("Year")
     ax.set_ylabel("Value (RMB)")
+    plt.tight_layout()
     st.pyplot(fig)
+
+    # 保存相同图表
     plt.savefig(chart_buf, format="png", bbox_inches="tight")
     chart_buf.seek(0)
     plt.close(fig)
@@ -162,7 +166,6 @@ if st.button(T["calc"]):
     pdf.set_font("SimHei", "B", 16)
     pdf.cell(0, 10, T["chart"], ln=True)
     pdf.image(chart_buf, x=15, y=30, w=180)
-    pdf.ln(120)
 
     # 页脚
     pdf.set_y(-15)
