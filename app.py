@@ -10,7 +10,7 @@ import os
 # 页面设置
 st.set_page_config(page_title="REITs Valuation SaaS", page_icon="🏢", layout="wide")
 
-# 多语言
+# 多语言配置
 LANG = {
     "en": {
         "title": "🏢 REITs Valuation System (Income Approach)",
@@ -32,6 +32,7 @@ LANG = {
         "avg_noi": "Average NOI (10k RMB)",
         "terminal": "Terminal Share (%)",
         "chart": "NOI & PV Trend",
+        "scenario_chart": "Scenario Valuation Comparison",
     },
     "zh": {
         "title": "🏢 REITs 收益法估值系统",
@@ -53,14 +54,15 @@ LANG = {
         "avg_noi": "平均 NOI（万元）",
         "terminal": "终值贡献 (%)",
         "chart": "NOI 与贴现现金流趋势",
+        "scenario_chart": "情景估值对比"
     }
 }
 
-# 语言切换
+# 语言选择
 lang_choice = st.sidebar.selectbox("🌐 Language / 语言", ["English", "中文"])
 T = LANG["en" if lang_choice == "English" else "zh"]
 
-# 标题
+# 页面标题
 st.title(T["title"])
 st.caption(T["subtitle"])
 st.divider()
@@ -97,47 +99,65 @@ def income_valuation(base_rent, rent_growth, occupancy, cost_ratio,
     total_value = np.sum(pvs) + tv / ((1 + discount_rate) ** term)
     return nois, pvs, total_value
 
-# 计算
+# 计算按钮
 if st.button(T["calc"]):
     nois, pvs, total_value = income_valuation(
         base_rent, rent_growth, occupancy, cost_ratio,
         discount_rate, long_growth, term, area
     )
 
+    # 显示结果
     st.subheader(T["result"])
     col1, col2, col3 = st.columns(3)
     col1.metric(T["valuation"], f"{total_value / 1e4:,.2f}")
     col2.metric(T["avg_noi"], f"{np.mean(nois)/1e4:,.2f}")
     col3.metric(T["terminal"], f"{(1 - np.sum(pvs)/total_value)*100:.1f}")
 
+    # 图表
     df = pd.DataFrame({"Year": np.arange(1, int(term) + 1), "NOI": nois, "PV": pvs})
     st.line_chart(df.set_index("Year"))
 
-    # 图表生成
+    # 情景模拟
+    if simulate:
+        scenarios = {
+            "Base": [base_rent, rent_growth, occupancy, cost_ratio, discount_rate, long_growth],
+            "+Δ": [base_rent*(1+delta/100), rent_growth*(1+delta/100), occupancy*(1+delta/100), cost_ratio, discount_rate*(1-delta/100), long_growth*(1+delta/100)],
+            "-Δ": [base_rent*(1-delta/100), rent_growth*(1-delta/100), occupancy*(1-delta/100), cost_ratio, discount_rate*(1+delta/100), long_growth*(1-delta/100)]
+        }
+        results = {}
+        for s, vals in scenarios.items():
+            _, _, v = income_valuation(*vals, term, area)
+            results[s] = v / 1e4
+        st.bar_chart(pd.DataFrame(results, index=["估值(万元)"]).T)
+
+    # 图表导出
     fig, ax = plt.subplots(figsize=(6, 3))
     ax.plot(df["Year"], df["NOI"], label="NOI", color="blue")
     ax.plot(df["Year"], df["PV"], label="PV", color="green")
     ax.legend()
     ax.set_title(T["chart"])
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Value (RMB)")
     chart_buf = BytesIO()
     plt.savefig(chart_buf, format="png")
     chart_buf.seek(0)
 
-    # PDF 生成
+    # === PDF 报告 ===
     pdf = FPDF()
     pdf.add_page()
 
-    # ✅ 加载中文字体（放在同目录）
-    font_path = "NotoSansSC-Regular.ttf"  # 或 SimHei.ttf
+    # ✅ 字体加载（支持中文 + 粗体）
+    font_path = "NotoSansSC-Regular.ttf"
     if os.path.exists(font_path):
-        pdf.add_font("SimHei", "", font_path, uni=True)
-        pdf.add_font("SimHei", "B", font_path, uni=True)  # ✅ 新增这行，注册粗体
+        for style in ["", "B", "I"]:
+            pdf.add_font("SimHei", style, font_path, uni=True)
         pdf.set_font("SimHei", "", 16)
     else:
         pdf.set_font("Arial", "", 16)
 
     pdf.cell(0, 10, "REITs 收益法估值报告", ln=True, align="C")
 
+    # ✅ LOGO
     logo_path = "logo.png"
     if os.path.exists(logo_path):
         pdf.image(logo_path, x=80, y=25, w=50)
@@ -157,14 +177,19 @@ if st.button(T["calc"]):
     )
     pdf.multi_cell(0, 10, report_text, align="L")
 
-    # 图表页
+    # 第二页：图表
     pdf.add_page()
     pdf.set_font("SimHei" if os.path.exists(font_path) else "Arial", "B", 14)
     pdf.cell(0, 10, T["chart"], ln=True)
     pdf.image(chart_buf, x=20, y=30, w=170)
 
-    pdf_output = BytesIO(pdf.output(dest="S").encode("latin1"))
-    st.download_button(T["export_pdf"], data=pdf_output,
-                       file_name=f"{project_name}_valuation_report.pdf",
-                       mime="application/pdf")
+    # ✅ 新版 fpdf2 直接返回 bytes，不再 encode
+    pdf_output = BytesIO(pdf.output(dest="S"))
 
+    # 下载按钮
+    st.download_button(
+        T["export_pdf"],
+        data=pdf_output,
+        file_name=f"{project_name}_valuation_report.pdf",
+        mime="application/pdf"
+    )
