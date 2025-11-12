@@ -4,20 +4,20 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 from io import BytesIO
+from datetime import datetime
 
-# ---------------- 页面配置 ----------------
+# 页面设置
 st.set_page_config(page_title="REITs Valuation SaaS", page_icon="🏢", layout="wide")
 
-# ---------------- 多语言字典 ----------------
+# 多语言字典
 LANG = {
     "en": {
         "title": "🏢 REITs Valuation System (Income Approach)",
-        "subtitle": "Simulate, compare and export REIT valuation reports.",
+        "subtitle": "Simulate, compare, and export professional REIT valuation reports.",
         "calc": "🚀 Run Valuation",
         "result": "Valuation Results",
-        "export_excel": "📤 Export Excel",
         "export_pdf": "🧾 Export PDF Report",
-        "scenario_chart": "Scenario Comparison",
+        "project": "Project Name",
         "base_rent": "Base Rent (RMB/m²/month)",
         "rent_growth": "Rent Growth Rate (%)",
         "occupancy": "Occupancy (%)",
@@ -26,17 +26,20 @@ LANG = {
         "long_growth": "Terminal Growth Rate (%)",
         "term": "Valuation Period (years)",
         "area": "Gross Floor Area (m²)",
-        "project": "Project Name",
-        "simulate": "Scenario Simulation (± changes)"
+        "simulate": "Scenario Simulation (± changes)",
+        "valuation": "Valuation (10k RMB)",
+        "avg_noi": "Average NOI (10k RMB)",
+        "terminal": "Terminal Share (%)",
+        "chart": "NOI & PV Trend",
+        "scenario_chart": "Scenario Valuation Comparison"
     },
     "zh": {
         "title": "🏢 REITs 收益法估值系统",
-        "subtitle": "可进行估值计算、情景对比并导出报告。",
+        "subtitle": "可进行估值计算、情景对比并导出专业报告。",
         "calc": "🚀 开始计算估值",
         "result": "估值结果",
-        "export_excel": "📤 导出 Excel",
         "export_pdf": "🧾 导出 PDF 报告",
-        "scenario_chart": "情景对比图",
+        "project": "项目名称",
         "base_rent": "起始租金（元/㎡/月）",
         "rent_growth": "租金年增长率（%）",
         "occupancy": "出租率（%）",
@@ -45,21 +48,25 @@ LANG = {
         "long_growth": "永续增长率（%）",
         "term": "收益期（年）",
         "area": "建筑面积（㎡）",
-        "project": "项目名称",
-        "simulate": "情景模拟（参数 ± 变化）"
+        "simulate": "情景模拟（参数 ± 变化）",
+        "valuation": "估值（万元）",
+        "avg_noi": "平均 NOI（万元）",
+        "terminal": "终值贡献 (%)",
+        "chart": "NOI 与贴现现金流趋势",
+        "scenario_chart": "情景估值对比"
     }
 }
 
-# ---------------- 语言选择 ----------------
+# 语言选择
 lang_choice = st.sidebar.selectbox("🌐 Language / 语言", ["English", "中文"])
 T = LANG["en" if lang_choice == "English" else "zh"]
 
-# ---------------- 页面标题 ----------------
+# 页面标题
 st.title(T["title"])
 st.caption(T["subtitle"])
 st.divider()
 
-# ---------------- 参数输入 ----------------
+# 参数输入
 col1, col2, col3 = st.columns(3)
 with col1:
     base_rent = st.number_input(T["base_rent"], value=60.73)
@@ -77,7 +84,7 @@ with col3:
 simulate = st.checkbox(T["simulate"], value=True)
 delta = st.slider("变化幅度(%)", 1, 20, 5)
 
-# ---------------- 收益法函数 ----------------
+# 核心估值函数
 def income_valuation(base_rent, rent_growth, occupancy, cost_ratio,
                      discount_rate, long_growth, term, area):
     nois = []
@@ -91,7 +98,7 @@ def income_valuation(base_rent, rent_growth, occupancy, cost_ratio,
     total_value = np.sum(pvs) + tv / ((1 + discount_rate) ** term)
     return nois, pvs, total_value
 
-# ---------------- 计算 ----------------
+# 执行计算
 if st.button(T["calc"]):
     nois, pvs, total_value = income_valuation(
         base_rent, rent_growth, occupancy, cost_ratio,
@@ -100,13 +107,13 @@ if st.button(T["calc"]):
 
     st.subheader(T["result"])
     col1, col2, col3 = st.columns(3)
-    col1.metric("估值（万元）", f"{total_value / 1e4:,.2f}")
-    col2.metric("平均 NOI（万元）", f"{np.mean(nois)/1e4:,.2f}")
-    col3.metric("终值贡献率", f"{(1 - np.sum(pvs)/total_value)*100:.1f}%")
+    col1.metric(T["valuation"], f"{total_value / 1e4:,.2f}")
+    col2.metric(T["avg_noi"], f"{np.mean(nois)/1e4:,.2f}")
+    col3.metric(T["terminal"], f"{(1 - np.sum(pvs)/total_value)*100:.1f}")
 
     # 图表
-    df = pd.DataFrame({"年份": np.arange(1, int(term) + 1), "NOI": nois, "贴现现金流": pvs})
-    st.line_chart(df.set_index("年份"))
+    df = pd.DataFrame({"Year": np.arange(1, int(term) + 1), "NOI": nois, "PV": pvs})
+    st.line_chart(df.set_index("Year"))
 
     # 情景模拟
     if simulate:
@@ -119,39 +126,48 @@ if st.button(T["calc"]):
         for s, vals in scenarios.items():
             _, _, v = income_valuation(*vals, term, area)
             results[s] = v / 1e4
+
         st.bar_chart(pd.DataFrame(results, index=["估值(万元)"]).T)
 
-    # ---------------- Excel 导出 ----------------
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, sheet_name="ValuationData", index=False)
-        summary = pd.DataFrame({
-            "指标": ["估值(万元)", "平均NOI(万元)", "终值贡献(%)"],
-            "数值": [total_value/1e4, np.mean(nois)/1e4, (1 - np.sum(pvs)/total_value)*100]
-        })
-        summary.to_excel(writer, sheet_name="Summary", index=False)
-    output.seek(0)
-    st.download_button(T["export_excel"], data=output, file_name=f"{project_name}_valuation.xlsx")
-
-    # ---------------- PDF 报告导出 ----------------
+    # ---------------- PDF 报告生成 ----------------
+    # 折现现金流图
     fig, ax = plt.subplots(figsize=(6, 3))
-    ax.plot(np.arange(1, int(term) + 1), nois, label="NOI")
-    ax.plot(np.arange(1, int(term) + 1), pvs, label="PV")
-    ax.legend(); ax.set_title("NOI & PV Trend"); ax.set_xlabel("Year"); ax.set_ylabel("Value (RMB)")
+    ax.plot(df["Year"], df["NOI"], label="NOI", color="blue")
+    ax.plot(df["Year"], df["PV"], label="PV", color="green")
+    ax.legend(); ax.set_title(T["chart"]); ax.set_xlabel("Year"); ax.set_ylabel("Value (RMB)")
     chart_buf = BytesIO()
-    plt.savefig(chart_buf, format="png"); chart_buf.seek(0)
+    plt.savefig(chart_buf, format="png")
+    chart_buf.seek(0)
 
+    # 创建 PDF
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, f"REITs Valuation Report - {project_name}", ln=True)
-    pdf.set_font("Arial", "", 12)
-    pdf.multi_cell(0, 8, f"""
+
+    # 封面页
+    pdf.set_font("Arial", "B", 20)
+    pdf.cell(0, 10, "REITs Valuation Report", ln=True, align="C")
+    pdf.image("https://upload.wikimedia.org/wikipedia/commons/5/50/REIT_logo_example.svg", x=80, y=25, w=50)
+    pdf.ln(60)
+    pdf.set_font("Arial", "", 14)
+    pdf.multi_cell(0, 10, f"""
 Project: {project_name}
+Date: {datetime.now().strftime("%Y-%m-%d")}
+Method: Income Approach (DCF)
 Valuation: {total_value/1e4:,.2f} 万元
 Average NOI: {np.mean(nois)/1e4:,.2f} 万元
-Terminal Contribution: {(1 - np.sum(pvs)/total_value)*100:.1f}%
-""")
-    pdf.image(chart_buf, x=20, y=80, w=170)
+Terminal Value Share: {(1 - np.sum(pvs)/total_value)*100:.1f}%
+""", align="L")
+    pdf.add_page()
+
+    # 图表页
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "NOI & PV Trend", ln=True, align="L")
+    pdf.image(chart_buf, x=20, y=30, w=170)
     pdf_output = BytesIO(pdf.output(dest="S").encode("latin1"))
-    st.download_button(T["export_pdf"], data=pdf_output, file_name=f"{project_name}_valuation.pdf", mime="application/pdf")
+
+    st.download_button(
+        T["export_pdf"],
+        data=pdf_output,
+        file_name=f"{project_name}_valuation_report.pdf",
+        mime="application/pdf"
+    )
