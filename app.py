@@ -1,8 +1,9 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+from io import BytesIO
 
-# ---------------- 页面设置 ----------------
+# ---------------- 页面配置 ----------------
 st.set_page_config(
     page_title="REITs Valuation SaaS",
     page_icon="🏢",
@@ -10,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------- 语言包 ----------------
+# ---------------- 多语言字典 ----------------
 LANG = {
     "en": {
         "title": "🏢 REITs Valuation System (Income Approach)",
@@ -24,6 +25,8 @@ LANG = {
         "project": "Project Name",
         "detail": "Show Detailed Data",
         "report": "Valuation Summary Report",
+        "export_excel": "📤 Export as Excel",
+        "export_pdf": "🧾 Export as PDF",
         "base_rent": "Base Rent (RMB/m²/month)",
         "rent_growth": "Rent Growth Rate (%)",
         "occupancy": "Occupancy (%)",
@@ -33,12 +36,11 @@ LANG = {
         "term": "Valuation Period (years)",
         "area": "Gross Floor Area (m²)",
         "simulate": "Scenario Simulation (± changes)",
-        "language": "Language",
         "scenario_chart": "Scenario Valuation Comparison"
     },
     "zh": {
         "title": "🏢 REITs 收益法估值系统",
-        "subtitle": "基于收益法（DCF）的房地产估值模型，可进行多情景模拟对比。",
+        "subtitle": "基于收益法（DCF）的房地产估值模型，可进行多情景模拟和结果导出。",
         "input": "参数输入",
         "calc": "🚀 开始计算估值",
         "scenario": "情景模拟",
@@ -48,6 +50,8 @@ LANG = {
         "project": "项目名称",
         "detail": "查看年度数据",
         "report": "估值报告摘要",
+        "export_excel": "📤 导出 Excel 报告",
+        "export_pdf": "🧾 导出 PDF 报告",
         "base_rent": "起始租金（元/㎡/月）",
         "rent_growth": "租金年增长率（%）",
         "occupancy": "出租率（%）",
@@ -57,7 +61,6 @@ LANG = {
         "term": "收益期（年）",
         "area": "建筑面积（㎡）",
         "simulate": "情景模拟（参数 ± 变化）",
-        "language": "语言",
         "scenario_chart": "情景估值对比"
     }
 }
@@ -96,11 +99,9 @@ st.subheader(f"🧩 {T['scenario']}")
 scenario_enable = st.checkbox(f"{T['simulate']}", value=True)
 delta = st.slider("参数变化幅度 (%)", 1, 20, 5)
 
-# ---------------- 核心计算函数 ----------------
-def income_valuation(
-    base_rent, rent_growth, occupancy, cost_ratio,
-    discount_rate, long_growth, term, area
-):
+# ---------------- 估值函数 ----------------
+def income_valuation(base_rent, rent_growth, occupancy, cost_ratio,
+                     discount_rate, long_growth, term, area):
     nois = []
     for t in range(1, int(term) + 1):
         rent_t = base_rent * ((1 + rent_growth) ** t) * occupancy * area * 12
@@ -113,7 +114,7 @@ def income_valuation(
     total_value = np.sum(pvs) + tv / ((1 + discount_rate) ** term)
     return nois, pvs, total_value
 
-# ---------------- 计算按钮 ----------------
+# ---------------- 执行计算 ----------------
 if st.button(T["calc"]):
     nois, pvs, total_value = income_valuation(
         base_rent, rent_growth, occupancy, cost_ratio,
@@ -131,29 +132,33 @@ if st.button(T["calc"]):
         "NOI": nois,
         "PV": pvs
     })
-
     st.line_chart(df.set_index("Year"))
 
-    # 详细数据
     with st.expander(T["detail"]):
         st.dataframe(df.style.format({"NOI": "{:,.0f}", "PV": "{:,.0f}"}))
 
-    # 报告摘要
-    st.markdown("---")
-    st.subheader(f"📑 {T['report']}")
-    st.markdown(f"""
-    **{T['project']}**: {project_name}  
-    **Discount Rate**: {discount_rate*100:.2f}%  
-    **Terminal Growth**: {long_growth*100:.2f}%  
-    **Period**: {int(term)} years  
-    **Valuation**: {total_value/1e4:,.2f} 万元
-    """)
+    # ---------------- 导出 Excel 报告 ----------------
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, sheet_name="ValuationData", index=False)
+        summary = pd.DataFrame({
+            "Metric": ["Valuation", "Avg NOI", "Terminal Share"],
+            "Value": [total_value/1e4, np.mean(nois)/1e4, (1 - np.sum(pvs)/total_value)*100]
+        })
+        summary.to_excel(writer, sheet_name="Summary", index=False)
+    output.seek(0)
+
+    st.download_button(
+        label=T["export_excel"],
+        data=output,
+        file_name=f"{project_name}_valuation.xlsx",
+        mime="application/vnd.ms-excel"
+    )
 
     # ---------------- 情景模拟 ----------------
     if scenario_enable:
         st.divider()
         st.subheader(f"📊 {T['scenario_chart']}")
-
         scenarios = {
             "Base": [base_rent, rent_growth, occupancy, cost_ratio, discount_rate, long_growth],
             "+Δ": [
@@ -173,17 +178,12 @@ if st.button(T["calc"]):
                 long_growth*(1-delta/100)
             ]
         }
-
         values = []
         for key, vals in scenarios.items():
             nois_s, pvs_s, val = income_valuation(*vals, term, area)
             values.append(val/1e4)
-
         sim_df = pd.DataFrame({
             "Scenario": ["-Δ", "Base", "+Δ"],
             "Valuation (10k RMB)": values[::-1]
         }).set_index("Scenario")
-
         st.bar_chart(sim_df)
-        st.caption(f"{T['simulate']} ±{delta}%")
-
