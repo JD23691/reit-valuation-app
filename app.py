@@ -5,7 +5,14 @@ import matplotlib.pyplot as plt
 from fpdf import FPDF
 from io import BytesIO
 from datetime import datetime
+import os
 
+logo_path = "logo.png"
+if os.path.exists(logo_path):
+    pdf.image(logo_path, x=80, y=25, w=50)
+else:
+    pdf.set_font("Arial", "I", 12)
+    pdf.cell(0, 10, "(No logo found — add logo.png to project folder)", ln=True, align="C")
 # 页面设置
 st.set_page_config(page_title="REITs Valuation SaaS", page_icon="🏢", layout="wide")
 
@@ -146,7 +153,6 @@ if st.button(T["calc"]):
     # 封面页
     pdf.set_font("Arial", "B", 20)
     pdf.cell(0, 10, "REITs Valuation Report", ln=True, align="C")
-    pdf.image("https://upload.wikimedia.org/wikipedia/commons/5/50/REIT_logo_example.svg", x=80, y=25, w=50)
     pdf.ln(60)
     pdf.set_font("Arial", "", 14)
     pdf.multi_cell(0, 10, f"""
@@ -171,3 +177,4 @@ Terminal Value Share: {(1 - np.sum(pvs)/total_value)*100:.1f}%
         file_name=f"{project_name}_valuation_report.pdf",
         mime="application/pdf"
     )
+
