@@ -7,12 +7,6 @@ from io import BytesIO
 from datetime import datetime
 import os
 
-logo_path = "logo.png"
-if os.path.exists(logo_path):
-    pdf.image(logo_path, x=80, y=25, w=50)
-else:
-    pdf.set_font("Arial", "I", 12)
-    pdf.cell(0, 10, "(No logo found — add logo.png to project folder)", ln=True, align="C")
 # 页面设置
 st.set_page_config(page_title="REITs Valuation SaaS", page_icon="🏢", layout="wide")
 
@@ -91,7 +85,7 @@ with col3:
 simulate = st.checkbox(T["simulate"], value=True)
 delta = st.slider("变化幅度(%)", 1, 20, 5)
 
-# 核心估值函数
+# 收益法函数
 def income_valuation(base_rent, rent_growth, occupancy, cost_ratio,
                      discount_rate, long_growth, term, area):
     nois = []
@@ -105,7 +99,7 @@ def income_valuation(base_rent, rent_growth, occupancy, cost_ratio,
     total_value = np.sum(pvs) + tv / ((1 + discount_rate) ** term)
     return nois, pvs, total_value
 
-# 执行计算
+# 主体逻辑
 if st.button(T["calc"]):
     nois, pvs, total_value = income_valuation(
         base_rent, rent_growth, occupancy, cost_ratio,
@@ -133,26 +127,36 @@ if st.button(T["calc"]):
         for s, vals in scenarios.items():
             _, _, v = income_valuation(*vals, term, area)
             results[s] = v / 1e4
-
         st.bar_chart(pd.DataFrame(results, index=["估值(万元)"]).T)
 
-    # ---------------- PDF 报告生成 ----------------
-    # 折现现金流图
+    # 生成折现现金流图
     fig, ax = plt.subplots(figsize=(6, 3))
     ax.plot(df["Year"], df["NOI"], label="NOI", color="blue")
     ax.plot(df["Year"], df["PV"], label="PV", color="green")
-    ax.legend(); ax.set_title(T["chart"]); ax.set_xlabel("Year"); ax.set_ylabel("Value (RMB)")
+    ax.legend()
+    ax.set_title(T["chart"])
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Value (RMB)")
     chart_buf = BytesIO()
     plt.savefig(chart_buf, format="png")
     chart_buf.seek(0)
 
-    # 创建 PDF
+    # PDF 生成
     pdf = FPDF()
     pdf.add_page()
 
     # 封面页
     pdf.set_font("Arial", "B", 20)
     pdf.cell(0, 10, "REITs Valuation Report", ln=True, align="C")
+
+    # ✅ 自动检测 logo.png
+    logo_path = "logo.png"
+    if os.path.exists(logo_path):
+        pdf.image(logo_path, x=80, y=25, w=50)
+    else:
+        pdf.set_font("Arial", "I", 12)
+        pdf.cell(0, 10, "(No logo found — add logo.png to project folder)", ln=True, align="C")
+
     pdf.ln(60)
     pdf.set_font("Arial", "", 14)
     pdf.multi_cell(0, 10, f"""
@@ -163,18 +167,18 @@ Valuation: {total_value/1e4:,.2f} 万元
 Average NOI: {np.mean(nois)/1e4:,.2f} 万元
 Terminal Value Share: {(1 - np.sum(pvs)/total_value)*100:.1f}%
 """, align="L")
+
+    # 第二页图表
     pdf.add_page()
-
-    # 图表页
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "NOI & PV Trend", ln=True, align="L")
+    pdf.cell(0, 10, T["chart"], ln=True, align="L")
     pdf.image(chart_buf, x=20, y=30, w=170)
-    pdf_output = BytesIO(pdf.output(dest="S").encode("latin1"))
 
+    # 导出
+    pdf_output = BytesIO(pdf.output(dest="S").encode("latin1"))
     st.download_button(
         T["export_pdf"],
         data=pdf_output,
         file_name=f"{project_name}_valuation_report.pdf",
         mime="application/pdf"
     )
-
