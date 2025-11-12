@@ -10,7 +10,7 @@ import os
 # 页面设置
 st.set_page_config(page_title="REITs Valuation SaaS", page_icon="🏢", layout="wide")
 
-# 多语言字典
+# 多语言
 LANG = {
     "en": {
         "title": "🏢 REITs Valuation System (Income Approach)",
@@ -32,7 +32,6 @@ LANG = {
         "avg_noi": "Average NOI (10k RMB)",
         "terminal": "Terminal Share (%)",
         "chart": "NOI & PV Trend",
-        "scenario_chart": "Scenario Valuation Comparison"
     },
     "zh": {
         "title": "🏢 REITs 收益法估值系统",
@@ -54,15 +53,14 @@ LANG = {
         "avg_noi": "平均 NOI（万元）",
         "terminal": "终值贡献 (%)",
         "chart": "NOI 与贴现现金流趋势",
-        "scenario_chart": "情景估值对比"
     }
 }
 
-# 语言选择
+# 语言切换
 lang_choice = st.sidebar.selectbox("🌐 Language / 语言", ["English", "中文"])
 T = LANG["en" if lang_choice == "English" else "zh"]
 
-# 页面标题
+# 标题
 st.title(T["title"])
 st.caption(T["subtitle"])
 st.divider()
@@ -78,7 +76,7 @@ with col2:
     discount_rate = st.number_input(T["discount_rate"], value=6.0) / 100
     long_growth = st.number_input(T["long_growth"], value=2.5) / 100
 with col3:
-    term = st.number_input(T["term"], value=64, step=1)
+    term = st.number_input(T["term"], value=64)
     area = st.number_input(T["area"], value=53606.58)
     project_name = st.text_input(T["project"], value="安居百泉阁")
 
@@ -99,7 +97,7 @@ def income_valuation(base_rent, rent_growth, occupancy, cost_ratio,
     total_value = np.sum(pvs) + tv / ((1 + discount_rate) ** term)
     return nois, pvs, total_value
 
-# 主体逻辑
+# 计算
 if st.button(T["calc"]):
     nois, pvs, total_value = income_valuation(
         base_rent, rent_growth, occupancy, cost_ratio,
@@ -112,31 +110,15 @@ if st.button(T["calc"]):
     col2.metric(T["avg_noi"], f"{np.mean(nois)/1e4:,.2f}")
     col3.metric(T["terminal"], f"{(1 - np.sum(pvs)/total_value)*100:.1f}")
 
-    # 图表
     df = pd.DataFrame({"Year": np.arange(1, int(term) + 1), "NOI": nois, "PV": pvs})
     st.line_chart(df.set_index("Year"))
 
-    # 情景模拟
-    if simulate:
-        scenarios = {
-            "Base": [base_rent, rent_growth, occupancy, cost_ratio, discount_rate, long_growth],
-            "+Δ": [base_rent*(1+delta/100), rent_growth*(1+delta/100), occupancy*(1+delta/100), cost_ratio, discount_rate*(1-delta/100), long_growth*(1+delta/100)],
-            "-Δ": [base_rent*(1-delta/100), rent_growth*(1-delta/100), occupancy*(1-delta/100), cost_ratio, discount_rate*(1+delta/100), long_growth*(1-delta/100)]
-        }
-        results = {}
-        for s, vals in scenarios.items():
-            _, _, v = income_valuation(*vals, term, area)
-            results[s] = v / 1e4
-        st.bar_chart(pd.DataFrame(results, index=["估值(万元)"]).T)
-
-    # 生成折现现金流图
+    # 图表生成
     fig, ax = plt.subplots(figsize=(6, 3))
     ax.plot(df["Year"], df["NOI"], label="NOI", color="blue")
     ax.plot(df["Year"], df["PV"], label="PV", color="green")
     ax.legend()
     ax.set_title(T["chart"])
-    ax.set_xlabel("Year")
-    ax.set_ylabel("Value (RMB)")
     chart_buf = BytesIO()
     plt.savefig(chart_buf, format="png")
     chart_buf.seek(0)
@@ -145,11 +127,16 @@ if st.button(T["calc"]):
     pdf = FPDF()
     pdf.add_page()
 
-    # 封面页
-    pdf.set_font("Arial", "B", 20)
-    pdf.cell(0, 10, "REITs Valuation Report", ln=True, align="C")
+    # ✅ 加载中文字体（放在同目录）
+    font_path = "NotoSansSC-Regular.ttf"  # 或 SimHei.ttf
+    if os.path.exists(font_path):
+        pdf.add_font("SimHei", "", font_path, uni=True)
+        pdf.set_font("SimHei", "", 16)
+    else:
+        pdf.set_font("Arial", "", 16)
 
-    # ✅ 自动检测 logo.png
+    pdf.cell(0, 10, "REITs 收益法估值报告", ln=True, align="C")
+
     logo_path = "logo.png"
     if os.path.exists(logo_path):
         pdf.image(logo_path, x=80, y=25, w=50)
@@ -158,27 +145,24 @@ if st.button(T["calc"]):
         pdf.cell(0, 10, "(No logo found — add logo.png to project folder)", ln=True, align="C")
 
     pdf.ln(60)
-    pdf.set_font("Arial", "", 14)
-    pdf.multi_cell(0, 10, f"""
-Project: {project_name}
-Date: {datetime.now().strftime("%Y-%m-%d")}
-Method: Income Approach (DCF)
-Valuation: {total_value/1e4:,.2f} 万元
-Average NOI: {np.mean(nois)/1e4:,.2f} 万元
-Terminal Value Share: {(1 - np.sum(pvs)/total_value)*100:.1f}%
-""", align="L")
+    pdf.set_font("SimHei" if os.path.exists(font_path) else "Arial", "", 12)
+    report_text = (
+        f"项目名称：{project_name}\n"
+        f"日期：{datetime.now().strftime('%Y-%m-%d')}\n"
+        f"估值方法：收益法（DCF）\n"
+        f"估值结果：{total_value/1e4:,.2f} 万元\n"
+        f"平均 NOI：{np.mean(nois)/1e4:,.2f} 万元\n"
+        f"终值贡献：{(1 - np.sum(pvs)/total_value)*100:.1f}%"
+    )
+    pdf.multi_cell(0, 10, report_text, align="L")
 
-    # 第二页图表
+    # 图表页
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, T["chart"], ln=True, align="L")
+    pdf.set_font("SimHei" if os.path.exists(font_path) else "Arial", "B", 14)
+    pdf.cell(0, 10, T["chart"], ln=True)
     pdf.image(chart_buf, x=20, y=30, w=170)
 
-    # 导出
     pdf_output = BytesIO(pdf.output(dest="S").encode("latin1"))
-    st.download_button(
-        T["export_pdf"],
-        data=pdf_output,
-        file_name=f"{project_name}_valuation_report.pdf",
-        mime="application/pdf"
-    )
+    st.download_button(T["export_pdf"], data=pdf_output,
+                       file_name=f"{project_name}_valuation_report.pdf",
+                       mime="application/pdf")
