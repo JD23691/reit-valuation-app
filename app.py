@@ -131,6 +131,7 @@ if st.button(T["calc"]):
     font_path = "NotoSansSC-Regular.ttf"  # 或 SimHei.ttf
     if os.path.exists(font_path):
         pdf.add_font("SimHei", "", font_path, uni=True)
+        pdf.add_font("SimHei", "B", font_path, uni=True)  # ✅ 新增这行，注册粗体
         pdf.set_font("SimHei", "", 16)
     else:
         pdf.set_font("Arial", "", 16)
@@ -166,3 +167,4 @@ if st.button(T["calc"]):
     st.download_button(T["export_pdf"], data=pdf_output,
                        file_name=f"{project_name}_valuation_report.pdf",
                        mime="application/pdf")
+
