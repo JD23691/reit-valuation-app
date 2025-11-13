@@ -7,22 +7,22 @@ from datetime import datetime
 from io import BytesIO
 
 # ===================== 页面配置 =====================
-st.set_page_config(page_title="REITs 收益法估值系统", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="REITs 收益法估值系统", layout="wide")
 
 # ===================== 侧边栏 =====================
 with st.sidebar:
     st.image("logo.png", width=300)
-    st.title("🏢 REITs估值SaaS")
+    st.title("REITs估值终端")
     st.markdown("**版本：** 3.1.0\n\n**作者：** 你的名字\n\n**说明：** 专业化REITs底层资产收益法估值与报告生成工具。")
     st.divider()
     st.caption("© 2025 REITs Valuation Cloud")
 
 # ===================== 主标题 =====================
-st.title("📈 保租房 REITs 收益法估值系统")
+st.title("保租房 REITs 收益法估值系统")
 st.markdown("通过收益法（Income Approach）计算保租房底层资产估值，并生成专业 PDF 报告。")
 
 # ===================== 参数输入区 =====================
-st.header("🧮 参数输入")
+st.header("参数输入")
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -38,7 +38,7 @@ with col3:
     area = st.number_input("建筑面积（㎡）", value=53606.58, step=100.0)
     project_name = st.text_input("项目名称", value="安居百泉阁")
 
-delta = st.slider("🔁 情景变化幅度（±%）", 1, 20, 5)
+delta = st.slider("情景变化幅度（±%）", 1, 20, 5)
 company_name = st.text_input("估值机构名称", value="中信资管估值部")
 
 st.divider()
@@ -63,7 +63,7 @@ def income_valuation(base_rent, rent_growth, occupancy, cost_ratio,
 
 
 # ===================== 计算按钮 =====================
-calculate = st.button("🚀 开始计算估值")
+calculate = st.button("开始计算估值")
 
 if calculate:
 
@@ -105,7 +105,7 @@ if calculate:
     st.plotly_chart(fig, use_container_width=True)
 
     # -------- 情景分析 --------
-    st.subheader("🧩 情景估值模拟")
+    st.subheader("情景估值模拟")
 
     scenarios = {
         "基准情景": [base_rent, rent_growth, occupancy, cost_ratio, discount_rate, long_growth],
@@ -191,7 +191,8 @@ if calculate:
     )
 
 else:
-    st.info("👆 请在上方填写参数后点击“开始计算估值”。")
+    st.info("请在上方填写参数后点击“开始计算估值”。")
+
 
 
 
