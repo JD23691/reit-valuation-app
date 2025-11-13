@@ -192,7 +192,3 @@ if calculate:
 
 else:
     st.info("请在上方填写参数后点击“开始计算估值”。")
-
-
-
-
