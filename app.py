@@ -11,7 +11,7 @@ st.set_page_config(page_title="REITs 收益法估值系统", page_icon="🏢", l
 
 # ===================== 侧边栏 =====================
 with st.sidebar:
-    st.image("logo.png", width=280)
+    st.image("logo.png", width=300)
     st.title("🏢 REITs估值SaaS")
     st.markdown("**版本：** 3.1.0\n\n**作者：** 你的名字\n\n**说明：** 专业化REITs底层资产收益法估值与报告生成工具。")
     st.divider()
@@ -192,5 +192,6 @@ if calculate:
 
 else:
     st.info("👆 请在上方填写参数后点击“开始计算估值”。")
+
 
 
